@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  agent-service:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: agent_service/package-lock.json
+      - name: Install dependencies
+        working-directory: agent_service
+        run: npm ci --no-audit --no-fund
+      - name: Typecheck
+        working-directory: agent_service
+        run: npm run typecheck
+      - name: Test
+        working-directory: agent_service
+        run: npm test
+      - name: Build
+        working-directory: agent_service
+        run: npm run build
+
+  installer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            agent_service/package-lock.json
+            installer/package-lock.json
+      - name: Install shared Agent service dependencies
+        working-directory: agent_service
+        run: npm ci --no-audit --no-fund
+      - name: Install Installer dependencies
+        working-directory: installer
+        run: npm ci --no-audit --no-fund
+      - name: Typecheck
+        working-directory: installer
+        run: npm run typecheck
+      - name: Test
+        working-directory: installer
+        run: npm test
+      - name: Build
+        working-directory: installer
+        run: npm run build

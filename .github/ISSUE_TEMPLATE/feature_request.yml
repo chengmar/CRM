@@ -1,0 +1,38 @@
+name: Feature request
+description: Suggest an improvement to the installer or Agent workflow
+title: "[Feature] "
+labels:
+  - enhancement
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Product area
+      options:
+        - Installation and recovery
+        - Lead discovery and verification
+        - Feishu workflow
+        - Email workflow
+        - WhatsApp workflow
+        - Monitoring and reporting
+        - Packaging and updates
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: Describe the user workflow and current limitation.
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Current workaround or alternatives

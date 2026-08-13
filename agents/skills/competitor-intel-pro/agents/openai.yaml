@@ -1,0 +1,4 @@
+interface:
+  display_name: "Competitor Intel Pro"
+  short_description: "Customs and trade-show leads"
+  default_prompt: "Use $competitor-intel-pro to find importers and trade-show leads for this product or HS Code."

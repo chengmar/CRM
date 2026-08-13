@@ -1,0 +1,4 @@
+interface:
+  display_name: "Customer Discovery Pro"
+  short_description: "Full-channel customer discovery"
+  default_prompt: "Use $customer-discovery-pro to discover and verify customers for this product and market."

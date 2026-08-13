@@ -1,0 +1,143 @@
+name: Build Windows Agent Installer
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    env:
+      CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
+      REQUIRE_SIGNATURE: ${{ startsWith(github.ref, 'refs/tags/v') && 'true' || 'false' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            agent_service/package-lock.json
+            installer/package-lock.json
+
+      - name: Cache Electron builder downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~\AppData\Local\electron\Cache
+            ~\AppData\Local\electron-builder\Cache
+          key: windows-electron-${{ hashFiles('installer/package-lock.json') }}
+          restore-keys: |
+            windows-electron-
+
+      - name: Verify Agent service
+        working-directory: agent_service
+        run: |
+          npm ci
+          npm run typecheck
+          npm test
+          npm run build
+
+      - name: Verify installer
+        working-directory: installer
+        run: |
+          npm ci
+          npm run typecheck
+          npm test
+
+      - name: Enforce commercial signing inputs
+        shell: powershell
+        run: |
+          if ($env:REQUIRE_SIGNATURE -eq "true") {
+            if ([string]::IsNullOrWhiteSpace($env:CSC_LINK) -or [string]::IsNullOrWhiteSpace($env:CSC_KEY_PASSWORD)) {
+              throw "Version-tag builds require WINDOWS_CSC_LINK and WINDOWS_CSC_KEY_PASSWORD."
+            }
+          }
+
+      - name: Build x64 and ARM64 installers
+        working-directory: installer
+        run: npm run dist:all
+
+      - name: Run clean Windows package acceptance
+        shell: powershell
+        run: |
+          $requireSignature = $env:REQUIRE_SIGNATURE -eq "true"
+          .\scripts\run-windows-package-acceptance.ps1 -Workspace $PWD -RequireSignature:$requireSignature -RequireCleanWindowsVm
+
+      - name: Scan release artifacts with Microsoft Defender
+        shell: powershell
+        run: .\scripts\run-windows-defender-scan.ps1 -Workspace $PWD
+
+      - name: Upload Defender report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: crm-agent-defender-${{ github.run_id }}
+          if-no-files-found: warn
+          retention-days: 30
+          path: outputs/windows_defender_scan/*.json
+
+      - name: Upload Windows release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: crm-agent-installer-windows-${{ github.run_id }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            installer/release/*-x64-Setup.exe
+            installer/release/*-x64-Portable.exe
+            installer/release/*-arm64-Setup.exe
+            installer/release/*-arm64-Portable.exe
+            installer/release/*.blockmap
+            installer/release/release-manifest.json
+            installer/release/SHA256SUMS.txt
+            installer/release/WINDOWS_INSTALLER_USER_GUIDE.md
+
+  compatibility-windows:
+    needs: build-windows
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - windows-2022
+          - windows-2025
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    env:
+      REQUIRE_SIGNATURE: ${{ startsWith(github.ref, 'refs/tags/v') && 'true' || 'false' }}
+
+    steps:
+      - name: Checkout acceptance scripts
+        uses: actions/checkout@v4
+
+      - name: Download Windows release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: crm-agent-installer-windows-${{ github.run_id }}
+          path: installer/release
+
+      - name: Verify setup and portable compatibility
+        shell: powershell
+        run: |
+          $requireSignature = $env:REQUIRE_SIGNATURE -eq "true"
+          .\scripts\run-windows-compatibility-acceptance.ps1 -Workspace $PWD -Architecture x64 -RequireSignature:$requireSignature
+
+      - name: Upload compatibility report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: crm-agent-compatibility-${{ matrix.os }}-${{ github.run_id }}
+          if-no-files-found: warn
+          retention-days: 30
+          path: outputs/windows_compatibility_acceptance/*.json

@@ -1,0 +1,4 @@
+interface:
+  display_name: "B2B Search Keywords"
+  short_description: "Multilingual B2B keyword packs"
+  default_prompt: "Use $b2b-search-keywords to generate multilingual search keywords for this product."
