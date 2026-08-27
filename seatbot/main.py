@@ -63,6 +63,13 @@ def cmd_rooms(config: AppConfig) -> int:
     return 0
 
 
+def cmd_seats(config: AppConfig, room_id: str) -> int:
+    client = _client_and_login(config)
+    data = client.get_seat_grid(room_id)
+    print(json.dumps(data, ensure_ascii=False, indent=2))
+    return 0
+
+
 def cmd_check(config: AppConfig) -> int:
     client = _client_and_login(config)
     rooms = client.list_rooms(config.dept_id_enc)
@@ -138,6 +145,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--verbose", action="store_true")
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("rooms", help="登录并列出房间 room_id")
+    seats = sub.add_parser("seats", help="读取指定房间的原始座位网格")
+    seats.add_argument("room_id", help="房间 ID，例如三楼为 3748")
     sub.add_parser("check", help="检查账号登录和房间读取")
     reserve = sub.add_parser("reserve", help="执行一次预约")
     reserve.add_argument("--dry-run", action="store_true", help="只显示计划，不发送预约请求")
@@ -155,6 +164,8 @@ def main() -> int:
         config = load_config(args.config)
         if args.command == "rooms":
             return cmd_rooms(config)
+        if args.command == "seats":
+            return cmd_seats(config, args.room_id)
         if args.command == "check":
             return cmd_check(config)
         if args.command == "reserve":
