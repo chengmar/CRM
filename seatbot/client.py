@@ -43,6 +43,7 @@ class ChaoxingClient:
     login_page = "https://passport2.chaoxing.com/mlogin?loginType=1&newversion=true&fid="
     login_url = "https://passport2.chaoxing.com/fanyalogin"
     room_list_url = "https://office.chaoxing.com/data/apps/seat/room/list"
+    seat_grid_url = "https://office.chaoxing.com/data/apps/seat/seatgrid/roomid"
     seat_page_url = "https://office.chaoxing.com/front/third/apps/seat/code?id={room_id}&seatNum={seat_num}"
     submit_url = "https://office.chaoxing.com/data/apps/seat/submit"
 
@@ -128,6 +129,30 @@ class ChaoxingClient:
         if not isinstance(rooms, list):
             raise ChaoxingError("房间列表返回格式异常")
         return rooms
+
+    def get_seat_grid(self, room_id: str) -> dict[str, Any]:
+        """Return the raw seat grid for a room.
+
+        Different Chaoxing deployments use slightly different JSON shapes, so
+        discovery intentionally returns the raw payload.  The CLI prints it
+        first; after the school's schema is confirmed we can safely derive an
+        'any available seat' strategy without probing guessed seat numbers.
+        """
+        response = self.session.get(
+            self.seat_grid_url,
+            params={"roomId": room_id},
+            headers=self.office_headers,
+            timeout=self.timeout,
+            verify=self.verify,
+        )
+        response.raise_for_status()
+        try:
+            data = response.json()
+        except ValueError as exc:
+            raise ChaoxingError("座位网格接口返回了非 JSON 内容") from exc
+        if not isinstance(data, dict):
+            raise ChaoxingError("座位网格接口返回格式异常")
+        return data
 
     def _seat_page_values(self, room_id: str, seat_num: str) -> tuple[str, str]:
         url = self.seat_page_url.format(room_id=room_id, seat_num=seat_num)
