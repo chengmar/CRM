@@ -1,4 +1,0 @@
-interface:
-  display_name: "Monthly Report"
-  short_description: "JSONL work logs and reports"
-  default_prompt: "Use $monthly-report to summarize this month from the team activity logs."

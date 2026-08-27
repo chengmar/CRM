@@ -1,4 +1,0 @@
-interface:
-  display_name: "Personalized Email"
-  short_description: "Case-backed B2B email drafting"
-  default_prompt: "Use $personalized-email to draft a personalized B2B outreach email from this customer URL and company profile."

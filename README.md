@@ -1,124 +1,134 @@
-# CRM 外贸获客智能体
+# Chaoxing SeatBot
 
-这是一个面向 B2B 外贸团队的 CRM 与获客自动化项目。系统覆盖公开信息采集、线索评分、联系人验证、飞书 CRM 同步、邮件与 WhatsApp 触达准备、回复归因、运营报表和 Windows 安装器。
+一个用于**本人账号**的超星图书馆座位预约脚本，目标部署环境为 Ubuntu 24.04 + systemd。
 
-本仓库是经过脱敏的协作版源码。真实客户数据、公司身份、账号密钥、服务器信息、数据库、日志、构建产物、安装包、压缩包、网站素材和运行输出均未提交。
+当前仓库已经预填河北工业大学座位入口中的：
 
-仓库不预置任何产品名称、型号、规格、参数、目标市场、产品图片或营销文案。代码只保留可复用的数据结构和业务流程；新产品必须通过本地配置或经审核的数据导入流程提供。
-
-## 当前状态
-
-项目已具备较完整的核心代码、测试、部署脚本和技术文档，适合继续开发、联调和代码审查。外部发送默认关闭，写入 CRM、发送邮件或 WhatsApp 等高风险动作需要显式配置和人工确认。
-
-这仍是技术预览版本。接入飞书、邮件、WhatsApp、搜索、模型或第三方验证服务时，需要使用者自行提供合规账号和密钥，并先在测试环境验证。
-
-## 仓库结构
-
-- `agent_service/`：Node.js/TypeScript 后端、命令行、任务队列、CRM 集成、获客和触达逻辑。
-- `installer/`：Electron Windows 安装器源码及测试。
-- `agents/skills/`：智能体技能定义。
-- `scripts/`：部署、验收、回滚和运维脚本。
-- `infra/`：本地辅助服务的 Docker Compose 配置。
-- `config/`：非敏感权限范围示例。
-- `website/`：已泛化的 WordPress 演示站源码，不包含原始图片与上传文件。
-- `docs/`：架构、使用、数据结构和发布检查文档。
-
-## 环境要求
-
-- Node.js 22 或更高版本
-- npm
-- Git
-- 可选：Docker Desktop 或 Docker Engine，用于本地搜索和验证服务
-- 可选：PowerShell 7、Git Bash 或 Linux shell，用于部署和验收脚本
-
-## 快速开始
-
-先克隆仓库并创建本地环境文件：
-
-```powershell
-git clone https://github.com/chengmar/CRM.git
-cd CRM
-Copy-Item .env.example .env
+```text
+deptIdEnc=214d62ddb0e920e7
 ```
 
-`.env` 只保存在本机。第一次启动时请保持以下安全默认值：
+## 设计原则
+
+- 使用超星网页正常登录与座位提交请求，不需要常驻浏览器。
+- 账号密码只放在服务器 `/etc/chaoxing-seatbot/seatbot.env`，不提交 Git。
+- 候选座位按顺序尝试；成功即停止。
+- 请求失败不会无限狂刷：每个座位最多 1~5 次，间隔最低 0.5 秒。
+- **不自动识别、破解或绕过验证码/滑块。** 超星要求验证码时，程序停止并记录错误。
+- 请遵守学校和超星的预约规则；若学校禁止自动预约，请不要启用定时任务。
+
+## 服务器要求
+
+1C1G 即可。2C2G / 50GB 的 Ubuntu 24.04 服务器绰绰有余。
+
+## 本地/服务器手动运行
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+cp config.example.yaml config.yaml
+```
+
+编辑 `.env`，填写自己的超星账号：
 
 ```dotenv
-AGENT_MODE=dry_run
-OUTBOUND_ENABLED=false
-EMAIL_OUTREACH_ENABLED=false
-WHATSAPP_OUTREACH_ENABLED=false
-EXTERNAL_SEND_REQUIRES_CONFIRMATION=true
-REQUIRE_HUMAN_APPROVAL_BEFORE_SEND=true
+CX_USERNAME=你的账号
+CX_PASSWORD=你的密码
 ```
 
-安装并验证后端：
+检查登录：
 
-```powershell
-cd agent_service
-npm ci
-npm run typecheck
-npm test
-npm run build
-npm run dev
+```bash
+python -m seatbot.main check
 ```
 
-默认 HTTP 地址由 `.env` 中的 `AGENT_HTTP_HOST` 和 `AGENT_HTTP_PORT` 控制。不要把服务直接暴露到公网，除非已经配置身份认证、反向代理和访问控制。
+列出学校自习室，获取 `room_id`：
 
-## Windows 安装器
-
-安装器可以单独开发和测试：
-
-```powershell
-cd installer
-npm ci
-npm run typecheck
-npm test
-npm run build
+```bash
+python -m seatbot.main rooms
 ```
 
-正式打包还需要在本地生成品牌资源并准备部署载荷。`installer/build/`、`installer/payload/`、`installer/release/` 和生成的安装包不会提交到 Git。具体流程见 `docs/windows-installer-guide.md` 和 `docs/release-checklist.md`。
+然后编辑 `config.yaml`：
 
-## 本地辅助服务
-
-仓库提供 SearXNG 和 Reacher 的 Compose 配置。先复制示例配置，并把占位密钥替换为本机生成的随机值：
-
-```powershell
-New-Item -ItemType Directory -Force infra/runtime/searxng
-Copy-Item infra/searxng/settings.example.yml infra/runtime/searxng/settings.yml
-docker compose -f infra/support-services.compose.yml up -d searxng
+```yaml
+booking:
+  day_offset: 1
+  start_time: "08:00"
+  end_time: "22:00"
+  weekdays: [Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday]
+  attempts_per_seat: 2
+  retry_interval_seconds: 1.0
+  choices:
+    - room_id: "1234"
+      seats: ["056", "057", "058"]
 ```
 
-`infra/runtime/` 被 Git 忽略。Reacher 位于可选 profile 中，仅在确有需要时启动。
+先做 dry-run：
 
-## 演示网站
-
-`website/` 是产品中立的 WordPress 站点架构，默认产品目录为空。商品信息、图片、客户上传文件和权属材料均未进入仓库，需要协作者在发布前使用已审核且可公开的内容补齐。
-
-```powershell
-cd website
-Copy-Item .env.example .env
-docker compose up -d
+```bash
+python -m seatbot.main reserve --dry-run
 ```
 
-## 配置原则
+确认后执行一次：
 
-所有真实配置都放在未跟踪的 `.env` 或部署平台的密钥存储中。仓库中的 `.env.example` 只描述变量，不包含有效凭据。
+```bash
+python -m seatbot.main reserve
+```
 
-配置时建议遵循以下顺序：
+## Ubuntu systemd 部署
 
-1. 先在 `dry_run` 模式完成本地验证。
-2. 再配置一个外部服务，并运行对应测试。
-3. CRM 写入和外部发送分别授权，不要一次性全部开启。
-4. 在启用邮件或 WhatsApp 前，确认域名、退订、频率、隐私和当地法规要求。
-5. 生产密钥不得写入代码、测试、截图、日志或问题单。
+从仓库目录执行：
 
-## 测试与协作
+```bash
+sudo ./scripts/install.sh --time 06:59:55
+```
 
-提交代码前至少运行受影响模块的类型检查和测试。推荐从短分支发起 Pull Request，并在说明中写清变更范围、验证方法、配置变化和安全影响。
+安装后填写：
 
-完整协作约定见 `CONTRIBUTING.md`。发现安全问题时不要公开提交包含利用细节或真实数据的 Issue，请按 `SECURITY.md` 处理。
+- `/etc/chaoxing-seatbot/seatbot.env`
+- `/etc/chaoxing-seatbot/config.yaml`
 
-## 公开仓库说明
+验证：
 
-公开版的取舍和排除范围见 `docs/public-release-scope.md`。本仓库未附带开源许可证；在许可证确定前，默认保留全部权利。
+```bash
+sudo -u seatbot /opt/chaoxing-seatbot/.venv/bin/python \
+  -m seatbot.main --config /etc/chaoxing-seatbot/config.yaml check
+```
+
+手动跑一次预约：
+
+```bash
+sudo systemctl start chaoxing-seatbot.service
+journalctl -u chaoxing-seatbot.service -n 100 --no-pager
+```
+
+一切正确后启用每天定时任务：
+
+```bash
+sudo systemctl enable --now chaoxing-seatbot.timer
+systemctl list-timers chaoxing-seatbot.timer
+```
+
+查看日志：
+
+```bash
+journalctl -u chaoxing-seatbot.service --since today
+```
+
+修改每日启动时间时重新运行安装脚本，例如：
+
+```bash
+sudo ./scripts/install.sh --time 07:59:55
+```
+
+## 还需要你自己确认的参数
+
+自动预约真正启用前必须确认三项：
+
+1. 超星账号/密码；
+2. 你要预约的 `room_id + seatNum`（可用 `rooms` 命令辅助获取房间 ID）；
+3. 学校每天开放次日预约的准确时间，以及你需要的开始/结束时间。
+
+在这些参数未确认前，不建议直接启用 timer。

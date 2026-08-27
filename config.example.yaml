@@ -1,0 +1,29 @@
+# 河北工业大学超星座位预约入口中的 deptIdEnc
+dept_id_enc: "214d62ddb0e920e7"
+
+tls_verify: true
+
+booking:
+  # 0=今天，1=明天。多数学校是提前预约次日，请按实际规则修改。
+  day_offset: 1
+  start_time: "08:00"
+  end_time: "22:00"
+
+  # 仅这些星期执行。使用英文星期名。
+  weekdays:
+    - Monday
+    - Tuesday
+    - Wednesday
+    - Thursday
+    - Friday
+    - Saturday
+    - Sunday
+
+  # 每个座位最多尝试次数；脚本强制最短间隔 0.5 秒，避免高频请求。
+  attempts_per_seat: 2
+  retry_interval_seconds: 1.0
+
+  # 按顺序尝试。先运行 `python -m seatbot.main rooms` 获取 room_id。
+  choices:
+    - room_id: ""
+      seats: []

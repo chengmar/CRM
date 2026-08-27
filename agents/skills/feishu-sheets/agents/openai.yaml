@@ -1,4 +1,0 @@
-interface:
-  display_name: "Feishu Sheets"
-  short_description: "Feishu Sheets API operations"
-  default_prompt: "Use $feishu-sheets to read or append rows in this Feishu spreadsheet."

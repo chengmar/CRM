@@ -1,4 +1,0 @@
-interface:
-  display_name: "Export Customer Research"
-  short_description: "Overseas buyer contact research"
-  default_prompt: "Use $export-customer-research to find overseas B2B buyers and decision makers for my product."
