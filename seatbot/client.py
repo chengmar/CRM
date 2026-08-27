@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from html.parser import HTMLParser
 from typing import Any
 from urllib.parse import quote
@@ -55,6 +56,8 @@ class ChaoxingClient:
             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
             "(KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
         )
+        self.dept_id_enc = ""
+        self.fid_enc = ""
 
     @property
     def login_headers(self) -> dict[str, str]:
@@ -106,6 +109,33 @@ class ChaoxingClient:
         if not data.get("status"):
             message = data.get("msg2") or data.get("mes") or data.get("msg") or "登录失败"
             raise LoginError(str(message))
+        self.dept_id_enc = dept_id_enc
+        self.fid_enc = self._discover_fid_enc(dept_id_enc)
+
+    def _discover_fid_enc(self, dept_id_enc: str) -> str:
+        """Extract the real fidEnc used by config/seat-grid APIs from the list page."""
+        url = (
+            "https://office.chaoxing.com/front/third/apps/seat/list?deptIdEnc="
+            + dept_id_enc
+        )
+        response = self.session.get(
+            url,
+            headers=self.office_headers,
+            timeout=self.timeout,
+            verify=self.verify,
+        )
+        response.raise_for_status()
+        patterns = (
+            r"loadData\(['\"]data/apps/seat/config['\"],\s*\{\s*fidEnc\s*:\s*['\"]([A-Za-z0-9_-]+)['\"]",
+            r"fidEnc\s*:\s*['\"]([A-Za-z0-9_-]+)['\"]",
+        )
+        for pattern in patterns:
+            match = re.search(pattern, response.text, re.I)
+            if match:
+                candidate = match.group(1)
+                if candidate and candidate != dept_id_enc:
+                    return candidate
+        raise ChaoxingError("未能从座位列表页解析真实 fidEnc")
 
     def list_rooms(self, dept_id_enc: str) -> list[dict[str, Any]]:
         params = {
@@ -131,16 +161,11 @@ class ChaoxingClient:
         return rooms
 
     def get_seat_grid(self, room_id: str) -> dict[str, Any]:
-        """Return the raw seat grid for a room.
-
-        Different Chaoxing deployments use slightly different JSON shapes, so
-        discovery intentionally returns the raw payload.  The CLI prints it
-        first; after the school's schema is confirmed we can safely derive an
-        'any available seat' strategy without probing guessed seat numbers.
-        """
+        if not self.fid_enc:
+            raise ChaoxingError("fidEnc 未初始化，请先登录")
         response = self.session.get(
             self.seat_grid_url,
-            params={"roomId": room_id},
+            params={"roomId": room_id, "fidEnc": self.fid_enc},
             headers=self.office_headers,
             timeout=self.timeout,
             verify=self.verify,
